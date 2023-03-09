@@ -1,82 +1,159 @@
 package ToggleGame.backend;
-import ToggleGame.frontend.ToggleGameInteraction;
 
-import java.util.Random;
+import java.util.ArrayList;
+import ToggleGame.frontend.ToggleGameInteraction;
+import static ToggleGame.backend.GameHelper.binaryToString;
+import static ToggleGame.backend.GameHelper.stringToBinary;
 
 /**
- * Buttons have the following order / placement on the screen
+ * Class to handle all game board operations.
  *
- *  0 1 2
- *  3 4 5
- *  6 7 8
- *
- * For the Colors: BLACK is 0 and WHITE = 1
- *
- * This file is incomplete and should be completed
- * Once it is completed please update this message
+ * @author Joanthon Meney
+ * @version 1.0 03/09/23
  */
 public class ToggleGameEngine implements ToggleGameInteraction {
+    /**
+     * Holds the graph of all game states connected by making one move to get to an adjacent vertex.
+     */
+    private static Graph graph;
 
     /**
-     * Initialize and return the game board for a ToggleGame (9x "1")
-     * @return the String "111111111" to start a game with all white squares
+     * Returns a 3x3 board of all white squares.
+     * @return the string "111111111", and all white board
      */
     @Override
     public String initializeGame() {
-        //starter code ... replace the below code with a string containing all 1's
-        return GameHelper.generateRandomBoard();
+        return "111111111";
     }
 
     /**
-     * Update the game board for the given button that was clicked.
-     * Squares marked as 0 are black and 1 is white
+     * Returns the updated board string after a button has been clicked.
      *
-     * @param button the game board square button that was clicked (between 0 and 8)
-     *
-     * @return the updated game board as a String giving the button colors in order
-     *         with "0" for black and "1" for white.
-     *
-     * @throws IllegalArgumentException when button is outside 0-8
+     * @param currentBoard the board string before a move is made
+     * @param button the button that was clicked
+     * @return the board string after a move is made
+     * @throws IllegalArgumentException if button given is outside range [0,8]
      */
     @Override
-    public String buttonClicked(String current, int button) {
-        //starter code...replace the below code
-        return GameHelper.generateRandomBoard();
+    public String buttonClicked(String currentBoard, int button) {
+        if (button < 0 || button > 8) {
+            throw new IllegalArgumentException();
+        }
+
+        // convert to binary
+        // flip color of button pressed first
+        int currentBoardBinary = stringToBinary(currentBoard);
+        currentBoardBinary ^= (1 << (8 - button));
+
+        // flip the color of the squares above, below, left, and right of the button clicked
+        // if they exist
+        int boardSize = 3;
+        // NORTH
+        if (button - boardSize >= 0) {
+            currentBoardBinary ^= (1 << (8 - button + boardSize));
+        }
+
+        // SOUTH
+        if (button + boardSize <= 8) {
+            currentBoardBinary ^= (1 << (8 - button - boardSize));
+        }
+
+        // EAST
+        if ((button + 1) % boardSize != 0) {
+            currentBoardBinary ^= (1 << (8 - button - 1));
+        }
+
+        // WEST
+        if (button % boardSize != 0) {
+            currentBoardBinary ^= (1 << (8 - button + 1));
+        }
+
+        return binaryToString(currentBoardBinary);
     }
 
-
     /**
-     * Return a sequence of moves that leads in the minimum number of moves
-     * from the current board state to the target state
+     * Returns the array of moves required to go from one game state to another.
      *
-     * @param current the current board state given as a String of 1's (white square)
-     *                and 0's (black square)
-     * @param target the target board state given as a String of 1's (white square)
-     *               and 0's (black square)
-     * @return the sequence of moves to advance the board from current to target.
-     *         Each move is the number associated with a button on the board. If no moves are
-     *         required to advance the currentBoard to the target an empty array is returned.
+     * @param current the current game state
+     * @param target the target game state
+     * @return the array of moves required to go from the current state to the target state
      */
     @Override
     public int[] movesToSolve(String current, String target) {
-        //starter code ... replace the below
-        return new int[] {new Random().nextInt(9)};
+        // if we've reached the target no moves need to be made
+        if (current.equals(target)) {
+            return new int[]{};
+        }
+
+        // only builds the graph on first call since graph is static
+        if (graph == null) {
+            graph = buildGraph();
+        }
+
+        // breadth first search from target game state
+        BreadthFirstPaths breadthFirstPaths = new BreadthFirstPaths(graph, stringToBinary(target));
+
+        // get the shortest path from the current game state to the target game state
+        // iterable is only comprised of game states not moves, need to convert
+        Iterable<Integer> path = breadthFirstPaths.pathTo(stringToBinary(current));
+
+        // convert iterable to array list
+        ArrayList<Integer> arrayPath = new ArrayList<>();
+        for (Integer board : path) {
+            arrayPath.add(board);
+        }
+
+        // determine buttons which need to be clicked to go from game state to game state
+        // up to the target
+        int[] movePath = new int[arrayPath.size()-1];
+        for (int i = 0; i+1 < arrayPath.size(); i++) {
+            String initial = binaryToString(arrayPath.get(i));
+            String next = binaryToString(arrayPath.get(i+1));
+            for (int button = 0; button < 9; button++) {
+                // break out of button finding once we find
+                // the button that takes us from the current state to the next
+                if (buttonClicked(initial, button).equals(next)) {
+                    movePath[i] = button;
+                    break;
+                }
+            }
+        }
+
+        return movePath;
     }
 
     /**
-     * Return the minimum required number of required moves (button clicks)
-     * to advance the current board to the target board.
+     * Returns the minimum number of moves to go from one game state to another.
      *
-     * @param current the current board state given as a String of 1's (white square)
-     *                and 0's (black square)
-     * @param target the target board state given as a String of 1's (white square)
-     *               and 0's (black square)
-     * @return the minimum number of moves to advance the current board
-     * to the target
+     * @param current the current game state
+     * @param target the target game state
+     * @return the minimum number of moves to go from the current state to the target state
      */
     @Override
     public int minNumberOfMoves(String current, String target) {
-        //starter code ... replace the below
-        return new Random().nextInt(9);
+        // simply find the moves to get to the target and count them
+        return movesToSolve(current, target).length;
+    }
+
+    /**
+     * Builds a graph of all game states.
+     *
+     * @return the graph of all game states connected by making one move to get to an adjacent vertex
+     */
+    public Graph buildGraph() {
+        // 512 possible game states 2**9
+        Graph graph = new Graph(512);
+
+        // for every game state generate all the game states one move away
+        // and connect them with an edge
+        for (int vertex = 0; vertex < 512; vertex++) {
+            String board = binaryToString(vertex);
+            for (int button = 0; button < 9; button++) {
+                String newBoard = buttonClicked(board, button);
+                graph.addEdge(stringToBinary(board), stringToBinary(newBoard));
+            }
+        }
+
+        return graph;
     }
 }
